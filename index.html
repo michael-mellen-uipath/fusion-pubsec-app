@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Veterans Benefits Management Portal</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="app">
+    <header class="topbar">
+      <nav class="topbar-nav" aria-label="Primary">
+        <a class="topbar-brand" href="#queue">Veterans Benefits Administration</a>
+        <div class="topbar-user" aria-label="Current user">
+          <span class="topbar-user-copy">
+            <span class="topbar-user-name">Current User</span>
+            <span class="topbar-user-role">Case Specialist</span>
+          </span>
+          <span class="topbar-user-icon" aria-hidden="true">CU</span>
+        </div>
+      </nav>
+    </header>
+
+    <div id="queue-page" class="page-shell">
+      <div class="dashboard-shell">
+        <aside class="sidebar-nav" aria-label="Dashboard navigation">
+          <div class="sidebar-brand">
+            <p class="sidebar-brand-title">Case Portal</p>
+          </div>
+
+          <div class="sidebar-nav-list">
+            <button class="sidebar-button is-active" type="button">
+              <span class="sidebar-button-icon" aria-hidden="true">&#8962;</span>
+              <span>My Review Queue</span>
+            </button>
+            <button class="sidebar-button" type="button">
+              <span class="sidebar-button-icon" aria-hidden="true">&#9716;</span>
+              <span>Program Analytics</span>
+            </button>
+            <button class="sidebar-button" type="button">
+              <span class="sidebar-button-icon" aria-hidden="true">&#9644;</span>
+              <span>Document Management</span>
+            </button>
+            <button class="sidebar-button" type="button">
+              <span class="sidebar-button-icon" aria-hidden="true">&#9881;</span>
+              <span>Settings</span>
+            </button>
+          </div>
+        </aside>
+
+        <div class="dashboard-main">
+          <header class="page-heading">
+            <h1>Benefits Case Review Queue</h1>
+          </header>
+
+          <main class="queue-layout">
+            <section class="filter-row" aria-label="Queue filters">
+              <button class="filter-chip is-active" data-filter="all">All Cases</button>
+              <button class="filter-chip" data-filter="sla-at-risk">SLA at Risk</button>
+              <button class="filter-chip" data-filter="awaiting-review">
+                Awaiting Review
+              </button>
+              <button class="filter-chip" data-filter="high-priority">
+                High Priority
+              </button>
+              <button class="filter-chip" data-filter="evidence-check">
+                Evidence Check
+              </button>
+            </section>
+
+            <section class="queue-panel" aria-labelledby="primary-case-heading">
+              <div class="section-label" id="primary-case-heading">
+                <span>Priority Case</span>
+                <span class="muted-text">1 case ready now</span>
+              </div>
+              <div id="primary-case-slot"></div>
+            </section>
+
+            <section class="queue-panel" aria-labelledby="supporting-case-heading">
+              <div class="section-label" id="supporting-case-heading">
+                <span>Supporting Queue</span>
+                <span class="muted-text">Additional assigned work</span>
+              </div>
+              <div id="supporting-case-slot" class="supporting-case-list"></div>
+            </section>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div id="case-page" class="page-shell" hidden>
+      <header class="page-heading page-heading--detail">
+        <h1 id="case-title">Case Record</h1>
+        <button class="action-button action-button--secondary" type="button">Maestro Instance</button>
+      </header>
+
+      <div class="subnav-row">
+        <a class="back-link" href="#queue">&larr; Return to queue</a>
+      </div>
+
+      <main id="case-view" class="case-layout"></main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -4,13 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Redirecting | Veterans Benefits Management Portal</title>
-    <meta http-equiv="refresh" content="0; url=index.html?view=case" />
+    <meta http-equiv="refresh" content="0; url=index.html#case" />
     <script>
       const params = new URLSearchParams(window.location.search);
       const id = params.get("id");
       const target = new URL("index.html", window.location.href);
-      target.searchParams.set("view", "case");
-      if (id) target.searchParams.set("id", id);
+      target.hash = id ? `case?id=${encodeURIComponent(id)}` : "case";
       window.location.replace(target.toString());
     </script>
   </head>

@@ -2,16 +2,38 @@ const CASES = [
   {
     id: "VET-24017",
     veteranName: "Michael Turner",
-    claimType: "Disability Compensation",
+    claimType: "Direct Service Connection",
     status: "Awaiting Review",
     priority: "High",
     daysInQueue: 45,
     slaAtRisk: true,
-    nextStep: "Review recommendation and determine whether additional evidence is required.",
+    nextStep: "Confirm the evidence is sufficient and advance the claim to Rating Preparation.",
     subtitle:
-      "Primary case routed for final eligibility and evidence sufficiency review.",
+      "Primary case routed for final review on a chronic low back pain service-connection claim.",
     summary:
-      "Claim intake, record gathering, and verification are complete. The record is assembled for final determination and evidence sufficiency review.",
+      "The record contains a current lumbar diagnosis, an in-service back strain event, and a positive nexus opinion. The file appears complete for a rating decision pending specialist approval.",
+    caseMetadata: {
+      claimId: "CLM-10482",
+      examId: "CNP-2026-00045",
+      examDate: "April 20, 2026",
+    },
+    serviceConnectionEvidence: [
+      {
+        label: "Current Disability",
+        summary:
+          "Confirmed diagnoses of lumbosacral strain and degenerative arthritis of the lumbar spine, supported by MRI and X-ray findings.",
+      },
+      {
+        label: "In-Service Event",
+        summary:
+          "Service treatment records document treatment for low back strain in June 2015 after lifting equipment during service.",
+      },
+      {
+        label: "Nexus",
+        summary:
+          "The C&P examiner found the lumbar condition at least as likely as not related to the in-service back strain, with no stronger post-service cause identified.",
+      },
+    ],
     caseJourney: {
       currentStep: 3,
       steps: [
@@ -36,94 +58,94 @@ const CASES = [
     assessment: {
       recommendedOutcome: "Proceed",
       evidenceSufficiency: "Sufficient",
-      riskIndicator: "Medium",
-      confidence: "82%",
-      readiness: "Needs Review",
+      riskIndicator: "Low",
+      confidence: "94%",
+      readiness: "Ready for Decision",
       rationale:
-        "Core eligibility, service alignment, and supporting medical evidence are present. Specialist validation remains the primary factor affecting final confidence.",
+        "All three service-connection elements are supported in the file: current disability, documented in-service back strain, and a favorable 'at least as likely as not' nexus opinion. The DBQ is complete and adequate for rating with no missing items identified.",
     },
     keyDrivers: [
-      "Service history verified",
-      "Medical evidence supports the claimed condition",
-      "Missing specialist validation may affect final confidence",
-      "No conflicting evidence identified in current records",
+      "DBQ marked complete and adequate for rating with no missing items",
+      "Positive nexus opinion supports direct service connection under the required standard",
+      "No stronger post-service traumatic cause is identified in the record",
+      "Current file supports routing forward to Rating Preparation",
     ],
     keyInsights: [
-      "Service history verified",
-      "Diagnosis confirmed",
-      "Supporting medical opinion present",
-      "No conflicting evidence identified",
+      "Lumbosacral strain confirmed",
+      "Degenerative arthritis of the lumbar spine confirmed",
+      "Veteran reports persistent symptoms since service",
+      "No stronger post-service cause documented",
     ],
     recommendationDraft:
-      "Proceed with claim. Current records support an initial determination, with specialist validation available if additional corroboration is required.",
+      "Proceed to rating. Current evidence supports direct service connection for chronic low back pain, including documented in-service onset, current lumbar pathology, and a favorable nexus opinion.",
     documentsReceived: [
-      "DD-214",
-      "Compensation claim form",
-      "Medical records PDF",
-      "Physician statement",
-      "Service verification result",
+      "Service treatment record for June 2015 low back strain",
+      "Private medical record with 2024-02-13 MRI",
+      "Thoracolumbar spine C&P examination",
+      "Medical nexus opinion",
+      "Lumbar spine X-ray results",
     ],
     systemsChecked: [
-      "Service history verification service",
-      "Prior claim and decision history",
-      "Document intake and classification records",
-      "Medical record ingestion workflow",
+      "Claim intake and document classification records",
+      "Service treatment record repository",
+      "Private medical evidence ingestion workflow",
+      "C&P exam and DBQ results feed",
     ],
     automationOutcomes: [
-      "Fields auto-filled across claim, service, and medical record systems",
-      "Service dates cross-checked against verification records",
-      "Prior claim history synchronized with the current file",
-      "Medical evidence mapped to claim conditions and supporting statements",
-      "Claim form data extracted",
-      "Medical evidence indexed",
-      "Prior claim history matched",
-      "Recommendation draft prepared",
+      "Claim issue mapped to chronic low back pain service-connection review",
+      "In-service back strain evidence matched to the claimed condition",
+      "Private MRI and lumbar imaging indexed to the same anatomical region",
+      "DBQ findings extracted into the rating-readiness summary",
+      "Positive nexus opinion linked to the sufficiency recommendation",
+      "Functional impact statements summarized for reviewer context",
+      "Exam adequacy result synced with the case record",
+      "Recommendation draft prepared for specialist approval",
     ],
     policyCompliance: [
       { label: "Eligibility criteria", status: "Met" },
       { label: "Service requirements", status: "Met" },
-      { label: "Evidence sufficiency threshold", status: "Needs Review" },
+      { label: "Evidence sufficiency threshold", status: "Met" },
     ],
     remainingReview: [
-      "Confirm recommendation against record findings",
-      "Validate whether specialist evidence is necessary",
-      "Finalize disposition or request additional evidence",
+      "Confirm the favorable nexus opinion supports direct service connection",
+      "Validate the file is ready to route to Rating Preparation",
+      "Approve the recommendation or document any final follow-up request",
     ],
     attachments: [
       {
-        title: "DD-214",
-        type: "Military separation record",
-        updated: "Received April 2, 2026",
+        title: "STR - Low back strain",
+        type: "Service Treatment Record",
+        updated: "Reviewed April 20, 2026",
         summary:
-          "Separation record confirms period of active duty service and discharge characterization used for eligibility review.",
+          "Service treatment documentation notes treatment for low back strain after lifting equipment during service in June 2015.",
       },
       {
-        title: "Compensation claim form",
-        type: "Initial claim submission",
-        updated: "Parsed April 3, 2026",
+        title: "Private MRI report",
+        type: "Private medical record",
+        updated: "Ingested April 20, 2026",
         summary:
-          "Submitted claim identifies the disability compensation request, onset timeline, and supporting treatment sources.",
+          "MRI dated February 13, 2024 documents degenerative disc disease and supports the presence of current lumbar pathology.",
       },
       {
-        title: "Medical records PDF",
-        type: "Clinical records",
-        updated: "Ingested April 4, 2026",
+        title: "Thoracolumbar spine DBQ",
+        type: "C&P examination",
+        updated: "Completed April 20, 2026",
         summary:
-          "Consolidated treatment documentation includes encounter notes, diagnostic findings, and relevant follow-up care.",
+          "Exam confirms lumbosacral strain and degenerative arthritis, painful motion, muscle spasm, and functional loss with bending, standing, and lifting.",
       },
       {
-        title: "Physician statement",
+        title: "Medical nexus opinion",
         type: "Medical opinion",
-        updated: "Received April 5, 2026",
+        updated: "Signed April 20, 2026",
         summary:
-          "Statement outlines the physician's assessment of condition severity and links ongoing symptoms to documented treatment history.",
+          "Examiner opined the claimed lumbar condition is at least as likely as not related to the documented in-service back strain.",
       },
       {
-        title: "Service verification result",
-        type: "Verification outcome",
-        updated: "Completed April 5, 2026",
+        title: "Lumbar spine X-ray",
+        type: "Diagnostic imaging",
+        updated: "Reviewed April 20, 2026",
         summary:
-          "Verification output confirms service dates and record match status for use in claim adjudication.",
+          "Imaging dated February 10, 2025 shows mild multilevel degenerative changes, consistent with the current lumbar diagnoses.",
       },
     ],
   },
@@ -330,6 +352,12 @@ function renderCasePage() {
     caseRecord.caseJourney &&
     Array.isArray(caseRecord.caseJourney.steps);
 
+  const evidenceItems = Array.isArray(caseRecord.serviceConnectionEvidence)
+    ? caseRecord.serviceConnectionEvidence.filter(
+        (item) => item && item.label && item.summary,
+      )
+    : [];
+
   if (!hasFullRecord) {
     caseView.innerHTML = `
       <section class="detail-card">
@@ -391,12 +419,12 @@ function renderCasePage() {
         <p class="summary-item-value">${caseRecord.claimType}</p>
       </article>
       <article class="detail-card detail-card--summary-tile">
-        <p class="summary-item-label">Current Status</p>
-        <p class="summary-item-value">${caseRecord.status}</p>
+        <p class="summary-item-label">Claim ID</p>
+        <p class="summary-item-value">${caseRecord.caseMetadata?.claimId || caseRecord.id}</p>
       </article>
       <article class="detail-card detail-card--summary-tile">
-        <p class="summary-item-label">Priority</p>
-        <p class="summary-item-value">${caseRecord.priority}</p>
+        <p class="summary-item-label">Exam ID</p>
+        <p class="summary-item-value">${caseRecord.caseMetadata?.examId || "N/A"}</p>
       </article>
       <article class="detail-card detail-card--summary-tile">
         <p class="summary-item-label">Days in Queue</p>
@@ -479,16 +507,20 @@ function renderCasePage() {
         </ul>
       </article>
 
-      <article class="detail-card">
-        <h2>Policy / Compliance Status</h2>
-        <div class="compliance-list">
-          ${caseRecord.policyCompliance
+      <article class="detail-card detail-card--evidence">
+        <div class="evidence-block-head">
+          <div>
+            <h2>Service Connection Evidence</h2>
+          </div>
+        </div>
+        <div class="evidence-grid">
+          ${evidenceItems
             .map(
-              (check) => `
-                <div class="compliance-item">
-                  <span>${check.label}</span>
-                  <span class="status-pill status-pill--${check.status.toLowerCase().replace(/\s+/g, "-")}">${check.status}</span>
-                </div>
+              (item) => `
+                <article class="evidence-item">
+                  <p class="summary-item-label">${item.label}</p>
+                  <p class="record-note">${item.summary}</p>
+                </article>
               `,
             )
             .join("")}

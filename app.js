@@ -1,3 +1,10 @@
+import { UiPath, UiPathError } from "@uipath/uipath-typescript";
+import {
+  Entities,
+  LogicalOperator,
+  QueryFilterOperator,
+} from "@uipath/uipath-typescript/entities";
+
 const CASES = [
   {
     id: "VET-24017",
@@ -16,6 +23,9 @@ const CASES = [
       claimId: "CLM-10482",
       examId: "CNP-2026-00045",
       examDate: "April 20, 2026",
+    },
+    maestroLookup: {
+      claimType: "Disability Compensation",
     },
     serviceConnectionEvidence: [
       {
@@ -79,11 +89,11 @@ const CASES = [
     recommendationDraft:
       "Proceed to rating. Current evidence supports direct service connection for chronic low back pain, including documented in-service onset, current lumbar pathology, and a favorable nexus opinion.",
     documentsReceived: [
+      "Medical nexus opinion",
+      "Thoracolumbar spine C&P examination",
+      "Lumbar spine X-ray results",
       "Service treatment record for June 2015 low back strain",
       "Private medical record with 2024-02-13 MRI",
-      "Thoracolumbar spine C&P examination",
-      "Medical nexus opinion",
-      "Lumbar spine X-ray results",
     ],
     systemsChecked: [
       "Claim intake and document classification records",
@@ -183,6 +193,791 @@ const CASES = [
     subtitle: "Supporting case available after current high-priority work.",
   },
 ];
+
+const IS_LOCAL_HOST =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+
+const AUTH_CONFIG = {
+  clientId: import.meta.env.VITE_UIPATH_CLIENT_ID || "",
+  orgName: import.meta.env.VITE_UIPATH_ORG_NAME || "",
+  tenantName: import.meta.env.VITE_UIPATH_TENANT_NAME || "",
+  baseUrl: import.meta.env.VITE_UIPATH_BASE_URL || "https://cloud.uipath.com",
+  redirectUri: IS_LOCAL_HOST
+    ? window.location.origin
+    : import.meta.env.VITE_UIPATH_REDIRECT_URI || window.location.origin,
+  scope: import.meta.env.VITE_UIPATH_SCOPES || import.meta.env.VITE_UIPATH_SCOPE || "",
+};
+
+const AUTH_KEYS = {
+  returnHash: "fusion_return_hash",
+};
+
+const DATA_FABRIC_CONFIG = {
+  entityId: "31db233b-ee3c-f111-8ef3-7c1e521935ca",
+  entityName: "vaDisabilityClaims",
+  claimTypeField: "claimType",
+  requiredClaimType: "Disability Compensation",
+  maestroFolderField: "maestroFolderId",
+  maestroProcessTypeField: "maestroProcessTypeId",
+  maestroInstanceField: "maestroProcessInstanceId",
+};
+
+const DOCUMENT_VIEWER_CONFIG = {
+  entityName: "VetDocs",
+  locatorFieldName: "doc",
+  locatorFileName: "MEDICAL NEXUS OPINION.pdf",
+  documents: {
+    "medical-nexus-opinion": {
+      fieldName: "doc",
+      title: "Medical nexus opinion",
+    },
+    "thoracolumbar-spine-cp-examination": {
+      fieldName: "CPexam",
+      title: "Thoracolumbar spine C&P examination",
+    },
+    "lumbar-spine-xray-results": {
+      fieldName: "xray",
+      title: "Lumbar spine X-ray results",
+    },
+  },
+};
+
+const DEFAULT_USER = {
+  name: "Current User",
+  role: "Case Specialist",
+  initials: "AU",
+};
+
+let sdk = new UiPath(AUTH_CONFIG);
+
+const authState = {
+  isAuthenticated: false,
+  isLoading: true,
+  error: null,
+};
+
+const maestroState = {
+  entityId: null,
+  entityIdPromise: null,
+  linkByCaseId: new Map(),
+  errorByCaseId: new Map(),
+  requestByCaseId: new Map(),
+};
+
+const documentViewerState = {
+  entityId: null,
+  entityIdPromise: null,
+  recordId: null,
+  recordIdPromise: null,
+  fileUrlByKey: new Map(),
+  current: {
+    caseId: null,
+    documentKey: null,
+    fileName: null,
+    title: "",
+    url: "",
+    status: "idle",
+    error: "",
+  },
+};
+
+function hasAuthConfig() {
+  return Boolean(
+    AUTH_CONFIG.clientId &&
+      AUTH_CONFIG.orgName &&
+      AUTH_CONFIG.tenantName &&
+      AUTH_CONFIG.redirectUri &&
+      AUTH_CONFIG.scope,
+  );
+}
+
+function updateUserDisplay() {
+  const name = document.getElementById("topbar-user-name");
+  const role = document.getElementById("topbar-user-role");
+  const icon = document.getElementById("topbar-user-icon");
+
+  if (!name || !role || !icon) {
+    return;
+  }
+
+  if (authState.isAuthenticated) {
+    name.textContent = "Authorized User";
+    role.textContent = DEFAULT_USER.role;
+    icon.textContent = DEFAULT_USER.initials;
+    return;
+  }
+
+  name.textContent = DEFAULT_USER.name;
+  role.textContent = DEFAULT_USER.role;
+  icon.textContent = DEFAULT_USER.initials;
+}
+
+function updateShellVisibility() {
+  const authRoot = document.getElementById("auth-root");
+  const appShell = document.getElementById("app-shell");
+
+  if (!authRoot || !appShell) {
+    return;
+  }
+
+  authRoot.hidden = authState.isAuthenticated;
+  appShell.hidden = !authState.isAuthenticated;
+  document.body.classList.toggle("auth-active", !authState.isAuthenticated);
+  updateUserDisplay();
+}
+
+function renderAuthScreen() {
+  const authRoot = document.getElementById("auth-root");
+
+  if (!authRoot || authState.isAuthenticated) {
+    return;
+  }
+
+  const isConfigValid = hasAuthConfig();
+  const statusMessage = authState.isLoading
+    ? "Connecting to UiPath authentication..."
+    : null;
+  const configMessage = !isConfigValid
+    ? "OAuth configuration is incomplete. Add the required Vite environment values before signing in."
+    : null;
+
+  authRoot.innerHTML = `
+    <main class="auth-shell">
+      <section class="auth-card" aria-labelledby="auth-title">
+        <p class="auth-eyebrow">UiPath Sign-In</p>
+        <div class="auth-copy">
+          <h1 id="auth-title">Secure access to the Veterans Benefits case portal</h1>
+          <p>Sign in with UiPath to open the review queue and case workspace.</p>
+        </div>
+        <ul class="auth-list">
+          <li>Organization: ${AUTH_CONFIG.orgName || "Not configured"}</li>
+          <li>Tenant: ${AUTH_CONFIG.tenantName || "Not configured"}</li>
+          <li>Base URL: ${AUTH_CONFIG.baseUrl || "Not configured"}</li>
+          <li>Scopes: ${AUTH_CONFIG.scope || "Not configured"}</li>
+        </ul>
+        <div class="auth-actions">
+          ${
+            statusMessage
+              ? `<p class="auth-message">${statusMessage}</p>`
+              : ""
+          }
+          ${
+            authState.error
+              ? `<p class="auth-message auth-message--error">${authState.error}</p>`
+              : ""
+          }
+          ${
+            configMessage
+              ? `<p class="auth-message auth-message--error">${configMessage}</p>`
+              : ""
+          }
+          <button id="login-button" class="auth-button" type="button" ${
+            authState.isLoading || !isConfigValid ? "disabled" : ""
+          }>
+            ${authState.isLoading ? "Redirecting to UiPath..." : "Login with UiPath"}
+          </button>
+        </div>
+      </section>
+    </main>
+  `;
+
+  const loginButton = document.getElementById("login-button");
+  if (loginButton) {
+    loginButton.addEventListener("click", handleLogin);
+  }
+}
+
+async function initializeAuth() {
+  authState.isLoading = true;
+  authState.error = null;
+  updateShellVisibility();
+  renderAuthScreen();
+
+  if (!hasAuthConfig()) {
+    authState.isLoading = false;
+    renderAuthScreen();
+    return;
+  }
+
+  try {
+    if (sdk.isInOAuthCallback()) {
+      await sdk.completeOAuth();
+      const returnHash = sessionStorage.getItem(AUTH_KEYS.returnHash);
+      if (returnHash) {
+        window.location.hash = returnHash;
+        sessionStorage.removeItem(AUTH_KEYS.returnHash);
+      }
+    }
+
+    authState.isAuthenticated = sdk.isAuthenticated();
+
+    if (authState.isAuthenticated && !window.location.hash) {
+      window.location.hash = "queue";
+    }
+  } catch (error) {
+    authState.error =
+      error instanceof UiPathError ? error.message : "Authentication failed";
+    authState.isAuthenticated = false;
+  } finally {
+    authState.isLoading = false;
+    updateShellVisibility();
+    renderAuthScreen();
+    if (authState.isAuthenticated) {
+      renderApp();
+    }
+  }
+}
+
+async function handleLogin() {
+  authState.isLoading = true;
+  authState.error = null;
+  renderAuthScreen();
+
+  try {
+    sessionStorage.setItem(
+      AUTH_KEYS.returnHash,
+      window.location.hash || "queue",
+    );
+    await sdk.initialize();
+    authState.isAuthenticated = sdk.isAuthenticated();
+  } catch (error) {
+    authState.error =
+      error instanceof UiPathError ? error.message : "Login failed";
+    authState.isAuthenticated = false;
+  } finally {
+    authState.isLoading = false;
+    updateShellVisibility();
+    renderAuthScreen();
+    if (authState.isAuthenticated) {
+      renderApp();
+    }
+  }
+}
+
+function handleLogout() {
+  sessionStorage.removeItem(`uipath_sdk_user_token-${AUTH_CONFIG.clientId}`);
+  sessionStorage.removeItem("uipath_sdk_oauth_context");
+  sessionStorage.removeItem("uipath_sdk_code_verifier");
+  sessionStorage.removeItem(AUTH_KEYS.returnHash);
+
+  sdk = new UiPath(AUTH_CONFIG);
+  authState.isAuthenticated = false;
+  authState.isLoading = false;
+  authState.error = null;
+  window.location.hash = "queue";
+  updateShellVisibility();
+  renderAuthScreen();
+}
+
+async function getDocumentEntityId() {
+  if (documentViewerState.entityId) {
+    return documentViewerState.entityId;
+  }
+
+  if (!documentViewerState.entityIdPromise) {
+    documentViewerState.entityIdPromise = (async () => {
+      const entities = getEntitiesService();
+      const allEntities = await entities.getAll();
+      const entity = allEntities.find(
+        (entry) =>
+          entry.name === DOCUMENT_VIEWER_CONFIG.entityName ||
+          entry.displayName === DOCUMENT_VIEWER_CONFIG.entityName,
+      );
+
+      if (!entity?.id) {
+        throw new Error(
+          `Data Fabric entity "${DOCUMENT_VIEWER_CONFIG.entityName}" was not found.`,
+        );
+      }
+
+      documentViewerState.entityId = entity.id;
+      return entity.id;
+    })().catch((error) => {
+      documentViewerState.entityIdPromise = null;
+      throw error;
+    });
+  }
+
+  return documentViewerState.entityIdPromise;
+}
+
+async function getDocumentRecordId() {
+  if (documentViewerState.recordId) {
+    return documentViewerState.recordId;
+  }
+
+  if (!documentViewerState.recordIdPromise) {
+    documentViewerState.recordIdPromise = (async () => {
+      const entityId = await getDocumentEntityId();
+      const entities = getEntitiesService();
+      const records = await entities.getAllRecords(entityId, { pageSize: 10 });
+      const targetRecord =
+        records.items?.find((record) =>
+          String(record?.[DOCUMENT_VIEWER_CONFIG.locatorFieldName] || "").includes(
+            DOCUMENT_VIEWER_CONFIG.locatorFileName,
+          ),
+        ) || records.items?.[0];
+
+      if (!targetRecord?.Id) {
+        throw new Error(
+          `No records were found in "${DOCUMENT_VIEWER_CONFIG.entityName}" for the document viewer.`,
+        );
+      }
+
+      documentViewerState.recordId = targetRecord.Id;
+      return targetRecord.Id;
+    })().catch((error) => {
+      documentViewerState.recordIdPromise = null;
+      throw error;
+    });
+  }
+
+  return documentViewerState.recordIdPromise;
+}
+
+async function getDocumentViewerUrl(documentKey) {
+  const documentConfig = DOCUMENT_VIEWER_CONFIG.documents[documentKey];
+
+  if (!documentConfig) {
+    throw new Error(`Document viewer key "${documentKey}" is not configured.`);
+  }
+
+  const cacheKey = `${DOCUMENT_VIEWER_CONFIG.entityName}::${documentKey}`;
+
+  if (documentViewerState.fileUrlByKey.has(cacheKey)) {
+    return documentViewerState.fileUrlByKey.get(cacheKey);
+  }
+
+  const entityId = await getDocumentEntityId();
+  const recordId = await getDocumentRecordId();
+  const entities = getEntitiesService();
+  const attachmentBlob = await entities.downloadAttachment(
+    entityId,
+    recordId,
+    documentConfig.fieldName,
+  );
+  const pdfBlob = new Blob([attachmentBlob], { type: "application/pdf" });
+  const objectUrl = URL.createObjectURL(pdfBlob);
+  documentViewerState.fileUrlByKey.set(cacheKey, objectUrl);
+  return objectUrl;
+}
+
+function resetDocumentViewer() {
+  for (const objectUrl of documentViewerState.fileUrlByKey.values()) {
+    URL.revokeObjectURL(objectUrl);
+  }
+  documentViewerState.fileUrlByKey.clear();
+  documentViewerState.recordId = null;
+  documentViewerState.recordIdPromise = null;
+  documentViewerState.current = {
+    caseId: null,
+    documentKey: null,
+    fileName: null,
+    title: "",
+    url: "",
+    status: "idle",
+    error: "",
+  };
+}
+
+function closeDocumentViewer() {
+  resetDocumentViewer();
+  renderDocumentViewer();
+}
+
+function renderDocumentViewer() {
+  const viewerRoot = document.getElementById("document-viewer-root");
+  if (!viewerRoot) {
+    return;
+  }
+
+  const state = documentViewerState.current;
+
+  if (!state.caseId || !state.documentKey) {
+    viewerRoot.hidden = true;
+    viewerRoot.innerHTML = "";
+    return;
+  }
+
+  let bodyMarkup = "";
+
+  if (state.status === "loading") {
+    bodyMarkup = `
+      <div class="document-viewer-loading">
+        Loading the selected document from Orchestrator Storage Buckets...
+      </div>
+    `;
+  } else if (state.status === "error") {
+    bodyMarkup = `
+      <div class="document-viewer-error">
+        ${state.error}
+      </div>
+    `;
+  } else if (state.status === "ready" && state.url) {
+    bodyMarkup = `
+      <iframe
+        class="document-viewer-frame"
+        src="${state.url}"
+        title="${state.title}"
+      ></iframe>
+    `;
+  }
+
+  viewerRoot.hidden = false;
+  viewerRoot.innerHTML = `
+    <div class="document-modal-backdrop" data-document-modal-close="true">
+      <section
+        class="detail-card detail-card--document-viewer document-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="document-modal-title"
+      >
+        <div class="document-viewer-head">
+          <div>
+            <h2 id="document-modal-title">Document Viewer</h2>
+            <p class="record-note">${state.title || "Selected case document"}</p>
+          </div>
+          <div class="document-viewer-actions">
+            ${
+              state.status === "ready" && state.url
+                ? `<a class="action-button action-button--secondary document-viewer-open" href="${state.url}" target="_blank" rel="noopener noreferrer">Open in new tab</a>`
+                : ""
+            }
+            <button class="action-button action-button--secondary" type="button" data-document-modal-close="true">Close</button>
+          </div>
+        </div>
+        ${bodyMarkup}
+      </section>
+    </div>
+  `;
+
+  viewerRoot.querySelectorAll('[data-document-modal-close="true"]').forEach((element) => {
+    element.addEventListener("click", (event) => {
+      if (
+        event.currentTarget === element &&
+        element.classList.contains("document-modal-backdrop") &&
+        event.target !== element
+      ) {
+        return;
+      }
+
+      closeDocumentViewer();
+    });
+  });
+}
+
+async function openCaseDocument(caseRecord, documentKey) {
+  const documentConfig = DOCUMENT_VIEWER_CONFIG.documents[documentKey];
+
+  if (!documentConfig) {
+    return;
+  }
+
+  documentViewerState.current = {
+    caseId: caseRecord.id,
+    documentKey,
+    fileName: documentConfig.fieldName,
+    title: documentConfig.title,
+    url: "",
+    status: "loading",
+    error: "",
+  };
+  renderDocumentViewer();
+
+  try {
+    const readUri = await getDocumentViewerUrl(documentKey);
+
+    if (getCurrentCaseId() !== caseRecord.id) {
+      return;
+    }
+
+    documentViewerState.current = {
+      ...documentViewerState.current,
+      url: readUri,
+      status: "ready",
+      error: "",
+    };
+  } catch (error) {
+    if (getCurrentCaseId() !== caseRecord.id) {
+      return;
+    }
+
+    documentViewerState.current = {
+      ...documentViewerState.current,
+      status: "error",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unable to load the selected document.",
+    };
+  }
+
+  renderDocumentViewer();
+}
+
+function getEntitiesService() {
+  return new Entities(sdk);
+}
+
+function getMaestroLookupClaimType(caseRecord) {
+  return (
+    caseRecord?.maestroLookup?.claimType || DATA_FABRIC_CONFIG.requiredClaimType
+  );
+}
+
+function buildMaestroInstanceUrl(record) {
+  const folderId = record?.[DATA_FABRIC_CONFIG.maestroFolderField];
+  const processTypeId = record?.[DATA_FABRIC_CONFIG.maestroProcessTypeField];
+  const processInstanceId = record?.[DATA_FABRIC_CONFIG.maestroInstanceField];
+
+  if (!folderId || !processTypeId || !processInstanceId) {
+    throw new Error("The Data Fabric record is missing one or more Maestro identifiers.");
+  }
+
+  return `${AUTH_CONFIG.baseUrl}/${encodeURIComponent(
+    AUTH_CONFIG.orgName,
+  )}/${encodeURIComponent(
+    AUTH_CONFIG.tenantName,
+  )}/maestro_/processes/${encodeURIComponent(
+    processTypeId,
+  )}/instances/${encodeURIComponent(processInstanceId)}?folderKey=${encodeURIComponent(
+    folderId,
+  )}`;
+}
+
+function hasCompleteMaestroData(record) {
+  return Boolean(
+    record?.[DATA_FABRIC_CONFIG.maestroFolderField] &&
+      record?.[DATA_FABRIC_CONFIG.maestroProcessTypeField] &&
+      record?.[DATA_FABRIC_CONFIG.maestroInstanceField],
+  );
+}
+
+function getRecordCreatedTimeValue(record) {
+  const candidates = [
+    record?.CreateTime,
+    record?.createTime,
+    record?.CreatedTime,
+    record?.createdTime,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const parsed = Date.parse(candidate);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+
+  return 0;
+}
+
+function pickLatestMaestroRecord(records) {
+  if (!Array.isArray(records) || !records.length) {
+    return null;
+  }
+
+  const validRecords = records.filter(hasCompleteMaestroData);
+  if (!validRecords.length) {
+    return null;
+  }
+
+  return [...validRecords].sort(
+    (left, right) =>
+      getRecordCreatedTimeValue(right) - getRecordCreatedTimeValue(left),
+  )[0];
+}
+
+async function getMaestroEntityId() {
+  if (maestroState.entityId) {
+    return maestroState.entityId;
+  }
+
+  if (!maestroState.entityIdPromise) {
+    maestroState.entityIdPromise = (async () => {
+      if (DATA_FABRIC_CONFIG.entityId) {
+        maestroState.entityId = DATA_FABRIC_CONFIG.entityId;
+        return DATA_FABRIC_CONFIG.entityId;
+      }
+
+      const entities = getEntitiesService();
+      const allEntities = await entities.getAll();
+      const entity = allEntities.find(
+        (entry) =>
+          entry.name === DATA_FABRIC_CONFIG.entityName ||
+          entry.displayName === DATA_FABRIC_CONFIG.entityName,
+      );
+
+      if (!entity?.id) {
+        throw new Error(
+          `Data Fabric entity "${DATA_FABRIC_CONFIG.entityName}" was not found.`,
+        );
+      }
+
+      maestroState.entityId = entity.id;
+      return entity.id;
+    })().catch((error) => {
+      maestroState.entityIdPromise = null;
+      throw error;
+    });
+  }
+
+  return maestroState.entityIdPromise;
+}
+
+async function getMaestroLink(caseRecord) {
+  const lookupClaimType = getMaestroLookupClaimType(caseRecord);
+
+  if (!lookupClaimType) {
+    return null;
+  }
+
+  if (maestroState.linkByCaseId.has(caseRecord.id)) {
+    return maestroState.linkByCaseId.get(caseRecord.id);
+  }
+
+  if (!maestroState.requestByCaseId.has(caseRecord.id)) {
+    const request = (async () => {
+      const entityId = await getMaestroEntityId();
+      const entities = getEntitiesService();
+      const response = await entities.queryRecordsById(entityId, {
+        filterGroup: {
+          logicalOperator: LogicalOperator.And,
+          queryFilters: [
+            {
+              fieldName: DATA_FABRIC_CONFIG.claimTypeField,
+              operator: QueryFilterOperator.Equals,
+              value: lookupClaimType,
+            },
+            {
+              fieldName: DATA_FABRIC_CONFIG.maestroProcessTypeField,
+              operator: QueryFilterOperator.NotEquals,
+              value: "",
+            },
+          ],
+        },
+      });
+
+      const record = pickLatestMaestroRecord(response.items);
+      if (!record) {
+        throw new Error(
+          `No ${DATA_FABRIC_CONFIG.entityName} row matched ${DATA_FABRIC_CONFIG.claimTypeField} "${lookupClaimType}" with populated Maestro identifiers.`,
+        );
+      }
+
+      const maestroLink = buildMaestroInstanceUrl(record);
+      maestroState.linkByCaseId.set(caseRecord.id, maestroLink);
+      return maestroLink;
+    })()
+      .finally(() => {
+        maestroState.requestByCaseId.delete(caseRecord.id);
+      });
+
+    maestroState.requestByCaseId.set(caseRecord.id, request);
+  }
+
+  return maestroState.requestByCaseId.get(caseRecord.id);
+}
+
+function setMaestroButtonState({
+  hidden = false,
+  disabled = false,
+  label = "Maestro Instance",
+  title = "",
+  url = "",
+}) {
+  const button = document.getElementById("maestro-instance-button");
+  if (!button) {
+    return;
+  }
+
+  button.hidden = hidden;
+  button.disabled = disabled;
+  button.textContent = label;
+  button.title = title;
+  button.dataset.maestroUrl = url;
+}
+
+function setMaestroDebugMessage(message = "") {
+  const debugMessage = document.getElementById("maestro-debug-message");
+  if (!debugMessage) {
+    return;
+  }
+
+  debugMessage.hidden = !message;
+  debugMessage.textContent = message;
+}
+
+async function updateMaestroButton(caseRecord) {
+  const lookupClaimType = getMaestroLookupClaimType(caseRecord);
+
+  if (!lookupClaimType) {
+    setMaestroButtonState({ hidden: true });
+    setMaestroDebugMessage("");
+    return;
+  }
+
+  maestroState.errorByCaseId.delete(caseRecord.id);
+  setMaestroButtonState({
+    hidden: false,
+    disabled: true,
+    label: "Loading Maestro...",
+    title: "Loading live Maestro instance details.",
+  });
+  setMaestroDebugMessage("");
+
+  try {
+    const maestroUrl = await getMaestroLink(caseRecord);
+    const activeCaseId = getCurrentCaseId();
+
+    if (caseRecord.id !== activeCaseId) {
+      return;
+    }
+
+    setMaestroButtonState({
+      hidden: false,
+      disabled: !maestroUrl,
+      label: "Maestro Instance",
+      title: maestroUrl
+        ? "Open the active Maestro process instance in a new tab."
+        : "No active Maestro instance is available for this case.",
+      url: maestroUrl || "",
+    });
+    setMaestroDebugMessage("");
+  } catch (error) {
+    const activeCaseId = getCurrentCaseId();
+    if (caseRecord.id !== activeCaseId) {
+      return;
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load the Maestro instance for this case.";
+
+    maestroState.errorByCaseId.set(caseRecord.id, message);
+    console.error("Maestro lookup failed", {
+      caseId: caseRecord.id,
+      lookupField: DATA_FABRIC_CONFIG.claimTypeField,
+      lookupValue: lookupClaimType,
+      entityName: DATA_FABRIC_CONFIG.entityName,
+      message,
+      error,
+    });
+
+    setMaestroButtonState({
+      hidden: false,
+      disabled: true,
+      label: "Maestro Unavailable",
+      title: message,
+    });
+    setMaestroDebugMessage(`Maestro debug: ${message}`);
+  }
+}
 
 function getPage() {
   if (window.location.hash.startsWith("#case")) return "case";
@@ -342,6 +1137,7 @@ function renderCasePage() {
   const caseRecord = CASES.find((entry) => entry.id === caseId) || CASES[0];
 
   title.textContent = `${caseRecord.id} - ${caseRecord.veteranName}`;
+  void updateMaestroButton(caseRecord);
 
   const hasFullRecord =
     Array.isArray(caseRecord.documentsReceived) &&
@@ -357,6 +1153,10 @@ function renderCasePage() {
         (item) => item && item.label && item.summary,
       )
     : [];
+
+  if (documentViewerState.current.caseId !== caseRecord.id) {
+    resetDocumentViewer();
+  }
 
   if (!hasFullRecord) {
     caseView.innerHTML = `
@@ -503,7 +1303,41 @@ function renderCasePage() {
       <article class="detail-card">
         <h2>Documents Received</h2>
         <ul class="checklist checklist--subdued">
-          ${caseRecord.documentsReceived.map((item) => `<li>${item}</li>`).join("")}
+          ${caseRecord.documentsReceived
+            .map((item) => {
+              const isMedicalNexusOpinion =
+                caseRecord.id === "VET-24017" &&
+                item === "Medical nexus opinion";
+              const isCpExam =
+                caseRecord.id === "VET-24017" &&
+                item === "Thoracolumbar spine C&P examination";
+              const isXrayResults =
+                caseRecord.id === "VET-24017" &&
+                item === "Lumbar spine X-ray results";
+
+              if (!isMedicalNexusOpinion && !isCpExam && !isXrayResults) {
+                return `<li>${item}</li>`;
+              }
+
+              const documentAction = isMedicalNexusOpinion
+                ? "medical-nexus-opinion"
+                : isCpExam
+                  ? "thoracolumbar-spine-cp-examination"
+                  : "lumbar-spine-xray-results";
+
+              return `
+                <li class="document-list-item document-list-item--interactive">
+                  <button
+                    class="document-link-button"
+                    type="button"
+                    data-document-action="${documentAction}"
+                  >
+                    <span class="document-link-title">${item}</span>
+                  </button>
+                </li>
+              `;
+            })
+            .join("")}
         </ul>
       </article>
 
@@ -526,16 +1360,33 @@ function renderCasePage() {
             .join("")}
         </div>
       </article>
+
+      <div id="document-viewer-root" class="document-viewer-root" hidden></div>
     </section>
   `;
+
+  caseView.querySelectorAll("[data-document-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      void openCaseDocument(caseRecord, button.dataset.documentAction);
+    });
+  });
+
+  renderDocumentViewer();
 }
 
 function renderApp() {
+  if (!authState.isAuthenticated) {
+    return;
+  }
+
   if (getPage() === "queue") {
     const queuePage = document.getElementById("queue-page");
     const casePage = document.getElementById("case-page");
     if (queuePage) queuePage.hidden = false;
     if (casePage) casePage.hidden = true;
+    setMaestroButtonState({ hidden: true });
+    setMaestroDebugMessage("");
+    closeDocumentViewer();
     renderQueuePage();
   }
 
@@ -545,10 +1396,28 @@ function renderApp() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (!window.location.hash) {
-    window.location.hash = "queue";
+  const logoutButton = document.getElementById("logout-button");
+  if (logoutButton) {
+    logoutButton.addEventListener("click", handleLogout);
   }
-  renderApp();
+
+  const maestroButton = document.getElementById("maestro-instance-button");
+  if (maestroButton) {
+    maestroButton.addEventListener("click", () => {
+      const maestroUrl = maestroButton.dataset.maestroUrl;
+      if (maestroUrl) {
+        window.open(maestroUrl, "_blank", "noopener,noreferrer");
+      }
+    });
+  }
+
+  updateShellVisibility();
+  renderAuthScreen();
+  void initializeAuth();
 });
 
-window.addEventListener("hashchange", renderApp);
+window.addEventListener("hashchange", () => {
+  if (authState.isAuthenticated) {
+    renderApp();
+  }
+});

@@ -7,20 +7,26 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-page="app">
-    <header class="topbar">
-      <nav class="topbar-nav" aria-label="Primary">
-        <a class="topbar-brand" href="#queue">Veterans Benefits Administration</a>
-        <div class="topbar-user" aria-label="Current user">
-          <span class="topbar-user-copy">
-            <span class="topbar-user-name">Current User</span>
-            <span class="topbar-user-role">Case Specialist</span>
-          </span>
-          <span class="topbar-user-icon" aria-hidden="true">CU</span>
-        </div>
-      </nav>
-    </header>
+    <div id="auth-root"></div>
 
-    <div id="queue-page" class="page-shell">
+    <div id="app-shell" hidden>
+      <header class="topbar">
+        <nav class="topbar-nav" aria-label="Primary">
+          <a class="topbar-brand" href="#queue">Veterans Benefits Administration</a>
+          <div class="topbar-user" aria-label="Current user">
+            <span class="topbar-user-copy">
+              <span id="topbar-user-name" class="topbar-user-name">Current User</span>
+              <span id="topbar-user-role" class="topbar-user-role">Case Specialist</span>
+            </span>
+            <div class="topbar-user-actions">
+              <span id="topbar-user-icon" class="topbar-user-icon" aria-hidden="true">AU</span>
+              <button id="logout-button" class="topbar-user-button" type="button">Logout</button>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <div id="queue-page" class="page-shell">
       <div class="dashboard-shell">
         <aside class="sidebar-nav" aria-label="Dashboard navigation">
           <div class="sidebar-brand">
@@ -85,21 +91,30 @@
           </main>
         </div>
       </div>
-    </div>
-
-    <div id="case-page" class="page-shell" hidden>
-      <header class="page-heading page-heading--detail">
-        <h1 id="case-title">Case Record</h1>
-        <button class="action-button action-button--secondary" type="button">Maestro Instance</button>
-      </header>
-
-      <div class="subnav-row">
-        <a class="back-link" href="#queue">&larr; Return to queue</a>
       </div>
 
-      <main id="case-view" class="case-layout"></main>
+      <div id="case-page" class="page-shell" hidden>
+        <header class="page-heading page-heading--detail">
+          <h1 id="case-title">Case Record</h1>
+          <button
+            id="maestro-instance-button"
+            class="action-button action-button--secondary"
+            type="button"
+            hidden
+          >
+            Maestro Instance
+          </button>
+        </header>
+
+        <div class="subnav-row">
+          <a class="back-link" href="#queue">&larr; Return to queue</a>
+          <p id="maestro-debug-message" class="maestro-debug-message" hidden></p>
+        </div>
+
+        <main id="case-view" class="case-layout"></main>
+      </div>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
